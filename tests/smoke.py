@@ -3,7 +3,7 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:8765/"
+BASE = os.environ.get("NS_BASE", "http://127.0.0.1:8765/")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS = os.path.join(ROOT, "tests", "shots")
 ARGS = ["--use-angle=d3d11", "--enable-gpu"]
@@ -83,9 +83,11 @@ def run_session(browser, label, viewport, phone, errors):
     page = ctx.new_page()
     watch(page, label, errors)
     page.goto(BASE, wait_until="load")
+    # The title must show before the scan has streamed in.
+    page.wait_for_selector("#btn-start", state="visible", timeout=60000)
     page.wait_for_function("window.NS_DEBUG && NS_DEBUG.splatLoaded === true", timeout=120000)
     check(errors, label, page.evaluate("NS_DEBUG.splatLoaded") is True, "splat did not load")
-    page.wait_for_selector("#btn-start", state="visible", timeout=60000)
+    page.wait_for_function("NS_DEBUG.alleyShown === true", timeout=60000)
     page.wait_for_timeout(1200)
     if not phone:
         shot(page, "title.png")

@@ -22,31 +22,40 @@
   var DEG = Math.PI / 180;
   var PROMPT_D = 1.5;
   var GLINT_D = 3;
-  var SHIMMER_D = 6;
+  var SHIMMER_D = 6.5;
+  var COS_INNER = Math.cos(10 * DEG);
+  var COS_OUTER = Math.cos(24 * DEG);
 
   // Real alley. The splat (assets/scene/scene.json) has scale 1.0: 1 scan unit = 1 m.
   // Measured from the decoded splats: floor at scan y 0.675 (placed at world y 0), inner wall faces
   // at world x -1.57 and +1.65, usable scan length z -12 to +12 (world z = -scan z).
   // The green wheelie cart measures 1.10 m tall, which agrees with scale 1.0.
-  // Clue n is the normal of the surface it lies on: up (floor), +x, -x, -z.
+  // Clue: x, y, z is the point on the real surface (from the scan). n is the surface normal:
+  // up (floor), +x, -x, -z. r turns the sheet about its normal (degrees). s is the sheet width (m).
+  // The sheet sits LIFT m off the surface on the alley side.
   var ALLEY = {
     spawn: { x: 0, z: -10, yaw: 180 },
     bounds: { x0: -1.0, x1: 1.0, z0: -12, z1: 12 },
     figure: { x: 0, z: -11 },
     fire: { x: 0, y: 1.6, z: 6 },
     clues: [
-      { x: -0.475, y: 0, z: -5.5, n: 'up' },
-      { x: 1.325, y: 0, z: -3.4, n: 'up' },
-      { x: -1.325, y: 0, z: -1.3, n: 'up' },
-      { x: 1.275, y: 0, z: 0.8, n: 'up' },
-      { x: -1.325, y: 0, z: 2.9, n: 'up' },
-      { x: 1.175, y: 0, z: 5.0, n: 'up' },
-      { x: -1.225, y: 0, z: 7.1, n: 'up' },
-      { x: 1.025, y: 0, z: 9.2, n: 'up' },
-      { x: -1.325, y: 0, z: 11.3, n: 'up' }
+      { x: 1.25, y: 0, z: -6.2, n: 'up', r: 25, s: 0.24, nook: 'trash can by the bicycle' },
+      { x: -0.62, y: -0.03, z: -3.45, n: 'up', r: 70, s: 0.24, nook: 'under the far corner of the trash carts' },
+      { x: -0.8, y: 0, z: -2.55, n: 'up', r: -15, s: 0.24, nook: 'foot of the door stair' },
+      { x: 1.3, y: 0, z: -1.0, n: 'up', r: 40, s: 0.24, nook: 'leaves by the trash bag' },
+      { x: 1.15, y: 0, z: 1.8, n: 'up', r: -20, s: 0.24, nook: 'below the electric boxes' },
+      { x: -1.6, y: 0, z: 4.05, n: 'up', r: 10, s: 0.24, nook: 'beside the door step' },
+      { x: 1.05, y: 0, z: 6.6, n: 'up', r: 30, s: 0.24, nook: 'under the fire-escape stair' },
+      { x: -1.75, y: 0, z: 11.5, n: 'up', r: -30, s: 0.24, nook: 'leaves under the gas meters' },
+      { x: 0.7, y: 0, z: 10.3, n: 'up', r: 15, s: 0.24, nook: 'front of the far trash cart' }
     ],
-    colliders: []
+    // Trash carts that stand in the walk zone.
+    colliders: [
+      { minX: -1.6, maxX: -0.62, minZ: -6.15, maxZ: -3.4 },
+      { minX: 0.55, maxX: 1.6, minZ: 10.45, maxZ: 12.5 }
+    ]
   };
+  var LIFT = 0.03;
   var NORMALS = { up: [0, 1, 0], '+x': [1, 0, 0], '-x': [-1, 0, 0], '-z': [0, 0, -1] };
   var PAPER_ROT = { up: [-90, 0, 0], '+x': [0, 90, 0], '-x': [0, -90, 0], '-z': [0, 180, 0] };
   var GLOW_ROT = { up: [0, 0, 0], '+x': [0, 0, -90], '-x': [0, 0, 90], '-z': [-90, 0, 0] };
@@ -79,6 +88,14 @@
   var splatEnt = null;
   var splatReady = false;
   var splatMode = 'none';
+  var splatReadyAt = -1;
+  var splatLoadedAt = -1;
+  var alleyShown = false;
+  var alleyShownAt = -1;
+  var titleAt = -1;
+  var pauseOnUnlock = true;
+  var pausedAt = -1e9;
+  var forcePh = -1;
   var lampBase = 2.2;
   var figureHold = false;
   var bounds = { x0: -2.7, x1: 2.7, z0: -6, z1: 39.5 };
@@ -335,27 +352,70 @@
     return tex;
   }
 
-  // Clue sheet: 0.25 m by 0.18 m. Glow plane is the same size and lies on the paper.
+  // Small four-point star for the sparkle.
+  function sparkTex() {
+    var c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    var g = c.getContext('2d');
+    var grd = g.createRadialGradient(32, 32, 0, 32, 32, 12);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    var lin = g.createLinearGradient(0, 0, 64, 0);
+    lin.addColorStop(0, 'rgba(255,255,255,0)');
+    lin.addColorStop(0.5, 'rgba(255,255,255,0.9)');
+    lin.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = lin;
+    g.fillRect(0, 31, 64, 2);
+    var lv = g.createLinearGradient(0, 0, 0, 64);
+    lv.addColorStop(0, 'rgba(255,255,255,0)');
+    lv.addColorStop(0.5, 'rgba(255,255,255,0.9)');
+    lv.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = lv;
+    g.fillRect(31, 0, 2, 64);
+    var tex = new pc.Texture(app.graphicsDevice, { width: 64, height: 64, format: pc.PIXELFORMAT_RGBA8, mipmaps: true });
+    tex.setSource(c);
+    return tex;
+  }
+
+  function spinQuat(nrm, deg, base) {
+    var q = new pc.Quat().setFromAxisAngle(new pc.Vec3(nrm[0], nrm[1], nrm[2]), deg || 0);
+    return q.mul(new pc.Quat().setFromEulerAngles(base[0], base[1], base[2]));
+  }
+
+  // Clue sheet: s by 0.72 s, LIFT m off the surface. The glow plane lies on the sheet.
+  // The sparkle sits on one corner of the sheet and turns to face the camera.
   function placeClue(c, sp) {
     var n = NORMALS[sp.n];
-    var r = PAPER_ROT[sp.n];
-    var g = GLOW_ROT[sp.n];
+    var s = sp.s || 0.24;
+    var h = s * 0.72;
+    var lift = sp.lift === undefined ? LIFT : sp.lift;
     c.x = sp.x; c.y = sp.y; c.z = sp.z;
-    c.e.setLocalScale(0.25, 0.18, 0.004);
-    c.e.setLocalPosition(sp.x + n[0] * 0.006, sp.y + n[1] * 0.006, sp.z + n[2] * 0.006);
-    c.e.setLocalEulerAngles(r[0], r[1], r[2]);
-    var gs = sp.n === 'up' ? [0.27, 1, 0.21] : (sp.n === '-z' ? [0.27, 1, 0.2] : [0.2, 1, 0.27]);
-    c.glow.setLocalScale(gs[0], gs[1], gs[2]);
-    c.glow.setLocalPosition(sp.x + n[0] * 0.012, sp.y + n[1] * 0.012, sp.z + n[2] * 0.012);
-    c.glow.setLocalEulerAngles(g[0], g[1], g[2]);
+    c.e.setLocalScale(s, h, 0.004);
+    c.e.setLocalPosition(sp.x + n[0] * lift, sp.y + n[1] * lift, sp.z + n[2] * lift);
+    c.e.setLocalRotation(spinQuat(n, sp.r, PAPER_ROT[sp.n]));
+    c.glow.setLocalScale(s * 1.12, 1, h * 1.18);
+    c.glow.setLocalPosition(sp.x + n[0] * (lift + 0.004), sp.y + n[1] * (lift + 0.004), sp.z + n[2] * (lift + 0.004));
+    c.glow.setLocalRotation(spinQuat(n, sp.r, GLOW_ROT[sp.n]));
+    // Sparkle point: a corner of the sheet, a little off the surface.
+    var corner = new pc.Vec3(s * 0.38, h * 0.3, 0);
+    c.e.getLocalRotation().transformVector(corner, corner);
+    c.sx = sp.x + corner.x + n[0] * (lift + 0.015);
+    c.sy = sp.y + corner.y + n[1] * (lift + 0.015);
+    c.sz = sp.z + corner.z + n[2] * (lift + 0.015);
+    c.spark.setLocalPosition(c.sx, c.sy, c.sz);
+    if (c.marker) { c.marker.setLocalPosition(sp.x, sp.y + 1.5, sp.z); }
   }
 
   function buildClues() {
     var paperTex = paperTexture();
     var glowTex = radialTex();
+    var starTex = sparkTex();
     for (var i = 0; i < TOTAL; i++) {
       var pm = new pc.StandardMaterial();
-      pm.diffuse = color(0.95, 0.94, 0.9);
+      pm.diffuse = color(0.7, 0.68, 0.62);
       pm.diffuseMap = paperTex;
       pm.specular = color(0.05, 0.05, 0.05);
       pm.gloss = 0.1;
@@ -369,23 +429,43 @@
       gm.opacityMapChannel = 'a';
       gm.blendType = pc.BLEND_NORMAL;
       gm.depthWrite = false;
+      gm.cull = pc.CULLFACE_NONE;
+      gm.useFog = false;
       gm.update();
+      var sm = new pc.StandardMaterial();
+      sm.diffuse = color(0, 0, 0);
+      sm.emissive = color(1, 0.97, 0.88);
+      sm.opacity = 0;
+      sm.opacityMap = starTex;
+      sm.opacityMapChannel = 'a';
+      sm.blendType = pc.BLEND_ADDITIVEALPHA;
+      sm.depthWrite = false;
+      sm.cull = pc.CULLFACE_NONE;
+      sm.useFog = false;
+      sm.update();
       var paper = new pc.Entity('clue' + i);
       paper.addComponent('render', { type: 'box', material: pm });
       var glow = new pc.Entity('clue-glint' + i);
       glow.addComponent('render', { type: 'plane', material: gm });
+      var spark = new pc.Entity('clue-spark' + i);
+      var sq = new pc.Entity('clue-spark-quad' + i);
+      sq.addComponent('render', { type: 'plane', material: sm });
+      sq.setLocalEulerAngles(90, 0, 0);
+      spark.addChild(sq);
       app.root.addChild(paper);
       app.root.addChild(glow);
-      var rec = { e: paper, glow: glow, x: 0, y: 0, z: 0 };
+      app.root.addChild(spark);
+      var rec = { e: paper, glow: glow, spark: spark, sq: sq, x: 0, y: 0, z: 0, sx: 0, sy: 0, sz: 0 };
       placeClue(rec, ALLEY.clues[i]);
       clueEnts.push(rec);
-      clueMats.push({ paper: pm, glow: gm, lastOp: -1, dimmed: false });
+      clueMats.push({ paper: pm, glow: gm, spark: sm, lastOp: -1, lastSp: -1, dimmed: false });
       if (debug === 'clues' || params.get('markers')) {
         var mk = new pc.Entity('clue-marker' + i);
         mk.addComponent('render', { type: 'box', material: mat(1, 0, 1, 0.1) });
         mk.setLocalScale(0.04, 3.0, 0.04);
         mk.setLocalPosition(rec.x, rec.y + 1.5, rec.z);
         app.root.addChild(mk);
+        rec.marker = mk;
       }
     }
   }
@@ -436,6 +516,8 @@
       castShadows: false
     });
     flash.setLocalPosition(0.12, -0.1, 0);
+    // A spot light shines along its local -Y. Turn it to shine along the camera view (-Z).
+    flash.setLocalEulerAngles(90, 0, 0);
     cam.addChild(flash);
   }
 
@@ -450,6 +532,29 @@
     buildClues();
     buildFigure();
     buildCamera();
+    // The real alley layout is used from the start. The stand-in stays hidden while the scan
+    // streams in, and shows only if the scan fails.
+    for (var i = 0; i < standIn.length; i++) { standIn[i].enabled = false; }
+    for (var s = 0; s < smokeEnts.length; s++) { smokeEnts[s].e.enabled = false; }
+    applyAlleyLayout();
+  }
+
+  function showStandIn() {
+    if (splatReady) { return; }
+    for (var i = 0; i < standIn.length; i++) { standIn[i].enabled = true; }
+    alleyShown = true;
+    console.warn('Scan not loaded. Stand-in alley shown.');
+  }
+
+  // The alley counts as shown when the streamed scan draws enough splats, or 20 s after the index loads.
+  function checkAlleyShown() {
+    if (alleyShown || !splatReady) { return; }
+    var n = app.stats && app.stats.frame ? (app.stats.frame.gsplats || 0) : 0;
+    if (splatReadyAt < 0) { splatReadyAt = time; }
+    if (n >= Math.min(120000, QL[qLevel].budget * 0.4) || time - splatReadyAt > 20) {
+      alleyShown = true;
+      alleyShownAt = performance.now();
+    }
   }
 
   function placeSplat(ent, m) {
@@ -526,9 +631,8 @@
 
   function hideStandIn() {
     for (var i = 0; i < standIn.length; i++) { standIn[i].enabled = false; }
-    for (var s = 0; s < smokeEnts.length; s++) { smokeEnts[s].e.enabled = false; }
     splatReady = true;
-    applyAlleyLayout();
+    splatLoadedAt = performance.now();
   }
 
   function loadLod(m) {
@@ -565,7 +669,7 @@
         left--;
         if (left === 0) {
           if (okCount > 0) { applyQuality(qLevel); placeSplat(root, m); hideStandIn(); }
-          else { console.warn('No chunk loaded. Stand-in alley kept.'); }
+          else { showStandIn(); }
         }
       };
       asset.on('load', function () {
@@ -585,7 +689,7 @@
     fetch('assets/scene/scene.json', { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (m) {
-        if (!m || !m.url) { return; }
+        if (!m || !m.url) { showStandIn(); return; }
         if (m.format === 'sog-chunks' || params.get('splat') === 'chunks') {
           splatMode = 'chunks';
           loadChunks(m);
@@ -594,7 +698,7 @@
           loadLod(m);
         }
       })
-      .catch(function () {});
+      .catch(function () { showStandIn(); });
   }
 
   function collide() {
@@ -661,35 +765,59 @@
   function updateGlints() {
     var rad = yaw * DEG, prad = pitch * DEG;
     var fx = -Math.sin(rad) * Math.cos(prad), fy = Math.sin(prad), fz = -Math.cos(rad) * Math.cos(prad);
+    var ex = freeCam ? freeCam.x : player.x;
+    var ey = freeCam ? freeCam.y : EYE;
+    var ez = freeCam ? freeCam.z : player.z;
     for (var i = 0; i < clueEnts.length; i++) {
       var c = clueEnts[i];
       var m = clueMats[i];
       var isFound = found.indexOf(i) >= 0;
       if (isFound) {
         if (!m.dimmed) {
-          m.paper.diffuse.set(0.55, 0.54, 0.5);
+          m.paper.diffuse.set(0.42, 0.41, 0.38);
           m.paper.update();
           m.dimmed = true;
           m.glow.opacity = 0;
           m.glow.update();
+          m.spark.opacity = 0;
+          m.spark.update();
+          c.spark.enabled = false;
           m.lastOp = 0;
         }
         continue;
       }
-      var vx = c.x - player.x, vy = c.y - EYE, vz = c.z - player.z;
+      var vx = c.x - ex, vy = c.y - ey, vz = c.z - ez;
       var d = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
       var dot = (vx * fx + vy * fy + vz * fz) / d;
-      var lit = (flashOn && dot > 0.97 && d < GLINT_D) ? 1 : 0;
-      // Shimmer: a soft light sweep about every 2.5 s, phase offset per clue.
-      var ph = (time + i * 0.37) % 2.5;
-      var sweep = ph < 0.6 ? Math.sin(Math.PI * ph / 0.6) : 0;
-      var base = d < SHIMMER_D ? 0.02 : 0;
-      var op = base + sweep * (0.08 + 0.5 * lit) * (d < SHIMMER_D ? 1 : 0) + lit * 0.12;
-      op = clamp(op, 0, 0.65);
+      // cone: 1 inside the flashlight core, 0 outside the beam.
+      var cone = flashOn ? clamp((dot - COS_OUTER) / (COS_INNER - COS_OUTER), 0, 1) : 0;
+      var range = clamp((SHIMMER_D - d) / 1.0, 0, 1);
+      var close = d < GLINT_D ? cone : 0;
+      // Slow sweep: a soft rise and fall of 1.6 s every 4.5 s, phase offset per clue.
+      var ph = forcePh >= 0 ? forcePh : (time + i * 1.13) % 4.5;
+      var sweep = ph < 1.6 ? Math.sin(Math.PI * ph / 1.6) : 0;
+      var op = range * (0.025 + sweep * (0.07 + 0.22 * cone)) + close * 0.1;
+      op = clamp(op, 0, 0.5);
       if (Math.abs(op - m.lastOp) > 0.004) {
         m.glow.opacity = op;
         m.glow.update();
         m.lastOp = op;
+      }
+      // Sparkle: a short twinkle of 0.35 s at the peak of the sweep.
+      var tw = (ph > 0.55 && ph < 0.9) ? Math.sin(Math.PI * (ph - 0.55) / 0.35) : 0;
+      var sp = range * tw * (0.35 + 0.65 * cone);
+      if (sp > 0.01) {
+        c.spark.enabled = true;
+        c.spark.lookAt(ex, ey, ez);
+        var k = (0.06 + 0.04 * tw) * Math.max(1, d / 3);
+        c.sq.setLocalScale(k, 1, k);
+      } else if (c.spark.enabled) {
+        c.spark.enabled = false;
+      }
+      if (Math.abs(sp - m.lastSp) > 0.01) {
+        m.spark.opacity = sp;
+        m.spark.update();
+        m.lastSp = sp;
       }
     }
   }
@@ -739,7 +867,8 @@
     var near = facingClue(PROMPT_D);
     var prompt = '';
     if (state === 'alley') {
-      if (found.length >= TOTAL) { prompt = 'All nine cards found.'; }
+      if (!alleyShown) { prompt = 'Loading the alley...'; }
+      else if (found.length >= TOTAL) { prompt = 'All nine cards found.'; }
       else if (figureActive && !landlordDone) { prompt = 'A figure waits at the alley mouth.'; }
       else if (near >= 0 && !isTouch) { prompt = 'Press E to inspect.'; }
     }
@@ -751,7 +880,10 @@
     } else if (visible && isTouch) {
       hint = 'Left side moves. Drag the right side to look.';
     }
-    if (state === 'alley' && found.length >= TOTAL && document.pointerLockElement) { unlockPointer(); }
+    if (state === 'alley' && found.length >= TOTAL && document.pointerLockElement) {
+      pauseOnUnlock = false;
+      unlockPointer();
+    }
     var inspectable = near >= 0 || (figureActive && !landlordDone);
     var key = [visible, found.length, inspectable, state === 'alley', prompt, hint].join('|');
     if (key === hudKey) { return; }
@@ -816,7 +948,7 @@
     if (n === 0) { return; }
     var arr = Array.prototype.slice.call(qWindow, 0, n).sort(function (a, b) { return a - b; });
     var median = arr[Math.floor(arr.length / 2)];
-    if (median > 55 && qLevel < QL.length - 1 && qStepsUp < 2) {
+    if (median > 55 && qLevel < (isTouch ? 2 : QL.length - 1) && qStepsUp < 2) {
       qStepsUp++;
       applyQuality(qLevel + 1);
     } else if (median < 40 && qLevel > 0 && qStepsUp >= 0 && qEval === 0) {
@@ -835,6 +967,7 @@
     qualityTick(dt);
     dt = Math.min(dt, 0.05);
     time += dt;
+    checkAlleyShown();
     if (freeCam) {
       moveFree(dt);
       rig.setLocalPosition(freeCam.x, freeCam.y, freeCam.z);
@@ -862,7 +995,7 @@
   }
 
   function lockPointer() {
-    if (!isTouch && state === 'alley' && !document.pointerLockElement && canvas.requestPointerLock) {
+    if (!isTouch && state === 'alley' && found.length < TOTAL && !document.pointerLockElement && canvas.requestPointerLock) {
       try {
         var r = canvas.requestPointerLock();
         if (r && r.catch) { r.catch(function () {}); }
@@ -913,6 +1046,8 @@
   function openPause() {
     if (state !== 'alley') { return; }
     state = 'pause';
+    pausedAt = performance.now();
+    keys = {};
     unlockPointer();
     UI.pause(resume);
   }
@@ -924,10 +1059,12 @@
     lockPointer();
   }
 
+  // Inspect the clue in view (same test as the prompt). A clue under the feet also counts.
   function doInspect() {
     if (state !== 'alley') { return; }
     if (figureActive && !landlordDone) { startLandlord(); return; }
-    var i = nearestClue(PROMPT_D);
+    var i = facingClue(PROMPT_D);
+    if (i < 0) { i = nearestClue(0.6); }
     if (i >= 0) { openCard(i); }
   }
 
@@ -986,7 +1123,7 @@
       switch (e.code) {
         case 'Escape':
           if (state === 'alley') { openPause(); }
-          else if (state === 'pause') { resume(); }
+          else if (state === 'pause' && performance.now() - pausedAt > 400) { resume(); }
           else if (state === 'card') { closeCard(); }
           else if (state === 'notebook') { closeNotebook(); }
           break;
@@ -1012,6 +1149,16 @@
       }
     });
     window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+    // Keys held when the window loses focus never send keyup. Clear them.
+    window.addEventListener('blur', function () { keys = {}; });
+
+    // Esc while the pointer is locked: the browser exits the lock and may not send the key.
+    // Losing the lock in the alley opens the pause screen.
+    document.addEventListener('pointerlockchange', function () {
+      if (document.pointerLockElement) { return; }
+      if (state === 'alley' && pauseOnUnlock && !isTouch) { openPause(); }
+      pauseOnUnlock = true;
+    });
 
     window.addEventListener('mousemove', function (e) {
       if (document.pointerLockElement !== canvas || state !== 'alley') { return; }
@@ -1112,6 +1259,18 @@
   function boot() {
     canvas = document.getElementById('view');
     if (!pc) { return; }
+    UI.bindScreens();
+    // Title first: it does not wait for the graphics device or the scan.
+    var plain = !debug || (debug !== 'board' && debug !== 'card' && debug !== 'fly' && debug.indexOf('cam=') !== 0);
+    if (plain) {
+      UI.showTitle(function () {
+        Music.unlock();
+        startPrologue();
+      });
+      state = 'title';
+      titleAt = performance.now();
+      Music.play('title', 1.5);
+    }
     pc.createGraphicsDevice(canvas, { deviceTypes: ['webgl2'], antialias: !isTouch }).then(function (device) {
       app = new pc.Application(canvas, { graphicsDevice: device });
       app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
@@ -1123,7 +1282,6 @@
       app.on('update', update);
       app.start();
 
-      UI.bindScreens();
       bindInput();
       loadScene();
 
@@ -1152,13 +1310,16 @@
         UI.openCard(0, closeCard);
         state = 'card';
         unlockPointer();
-      } else {
-        UI.showTitle(function () {
-          Music.unlock();
-          startPrologue();
-        });
-        state = 'title';
-        Music.play('title', 1.5);
+      } else if (state === 'alley') {
+        // The player passed the title and prologue before the device was ready.
+        lockPointer();
+      }
+    }).catch(function (err) {
+      console.warn('No WebGL 2 device.', err);
+      var t = document.getElementById('t-load');
+      if (t) {
+        t.setAttribute('data-error', '1');
+        t.textContent = 'This browser cannot show the 3D alley. Turn on WebGL 2 or use a newer browser.';
       }
     });
   }
@@ -1215,12 +1376,26 @@
       var c = clueEnts[i];
       if (!c) { return 'none'; }
       player.x = clamp(c.x * 0.7, bounds.x0, bounds.x1);
-      player.z = c.z;
+      player.z = clamp(c.z - 0.6, bounds.z0, bounds.z1);
+      yaw = Math.atan2(-(c.x - player.x), -(c.z - player.z)) / DEG;
       doInspect();
       return state;
     },
+    setClue: function (i, sp) {
+      if (!clueEnts[i]) { return false; }
+      ALLEY.clues[i] = sp;
+      placeClue(clueEnts[i], sp);
+      return true;
+    },
+    get alleyShown() { return alleyShown; },
+    shimmerPhase: function (ph) { forcePh = ph === undefined ? -1 : ph; return forcePh; },
+    timing: function () {
+      return { title: titleAt, splatIndex: splatLoadedAt, alleyShown: alleyShownAt,
+        gsplats: app && app.stats && app.stats.frame ? app.stats.frame.gsplats : -1 };
+    },
     state: function () {
-      return { state: state, found: found.length, figureActive: figureActive, landlordDone: landlordDone };
+      return { state: state, found: found.length, figureActive: figureActive, landlordDone: landlordDone,
+        x: player.x, z: player.z, yaw: yaw, pitch: pitch, locked: document.pointerLockElement === canvas };
     }
   };
 

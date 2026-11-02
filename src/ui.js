@@ -16,6 +16,7 @@
     for (var i = 0; i < SCREENS.length; i++) {
       $('scr-' + SCREENS[i]).classList.toggle('on', SCREENS[i] === name);
     }
+    document.body.classList.toggle('overlay-on', !!name);
     advanceFn = null;
     if (name !== 'board') { boardRedraw = null; }
   }
@@ -38,6 +39,17 @@
     window.addEventListener('resize', function () {
       if (boardRedraw) { boardRedraw(); }
     });
+    // Phones report the new size late after a turn. Resize again when the size settles.
+    var settle = function () {
+      setTimeout(function () {
+        window.scrollTo(0, 0);
+        window.dispatchEvent(new Event('resize'));
+      }, 350);
+    };
+    window.addEventListener('orientationchange', settle);
+    if (window.visualViewport) { window.visualViewport.addEventListener('resize', settle); }
+    // iOS Safari ignores user-scalable=no: block pinch zoom with the gesture events.
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   }
 
   function showTitle(onStart) {
@@ -47,6 +59,15 @@
     txt($('t-disc'), S.disclaimer);
     $('btn-start').onclick = function () { onStart(); };
     show('title');
+    // On a slow phone link the alley loads after the title. Say so until it is ready.
+    var loadEl = $('t-load');
+    var poll = function () {
+      if (loadEl.getAttribute('data-error')) { return; }
+      var ready = window.NS_DEBUG && window.NS_DEBUG.splatLoaded;
+      txt(loadEl, ready ? '' : 'The alley is loading.');
+      if (!ready) { setTimeout(poll, 500); }
+    };
+    poll();
   }
 
   function prologue(onDone) {

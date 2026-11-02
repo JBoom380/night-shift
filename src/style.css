@@ -22,6 +22,11 @@ html, body {
   font-family: var(--ui);
   font-size: 17px;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -61,13 +66,17 @@ html, body {
   padding: 18px;
   padding-top: max(18px, env(safe-area-inset-top));
   padding-bottom: max(18px, env(safe-area-inset-bottom));
+  padding-left: max(18px, env(safe-area-inset-left));
+  padding-right: max(18px, env(safe-area-inset-right));
   background: rgba(5, 6, 7, 0.94);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .screen.on { display: flex; }
 .screen > * { margin-top: auto; margin-bottom: auto; flex-shrink: 0; }
 .screen.dim > * { margin-bottom: 0; }
-.screen.dim { background: rgba(5, 6, 7, 0.35); justify-content: flex-end; padding-bottom: 28px; }
+.screen.dim { background: rgba(5, 6, 7, 0.35); justify-content: flex-end; padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 12px)); }
 .screen.board-screen { justify-content: flex-start; background: #120d09; }
 
 .stack {
@@ -98,7 +107,7 @@ html, body {
 }
 .small { font-size: 16px; line-height: 1.45; text-align: center; color: #b9b19a; margin: 0; }
 .small-text { font-size: 16px; line-height: 1.45; margin: 0; }
-.paper a { color: inherit; text-decoration: underline; }
+.paper a { color: inherit; text-decoration: underline; display: inline-block; min-height: 44px; padding: 12px 0; }
 
 .paper {
   background: var(--paper);
@@ -107,6 +116,7 @@ html, body {
   border-top: 8px solid var(--tape);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
   font-family: var(--type);
+  overflow-wrap: anywhere;
 }
 
 .story-text {
@@ -358,7 +368,7 @@ html, body {
   inset: 0;
   z-index: 10;
   pointer-events: none;
-  padding: max(12px, env(safe-area-inset-top)) 14px max(12px, env(safe-area-inset-bottom));
+  padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -407,6 +417,20 @@ html, body {
   font-size: 17px;
 }
 .hud-bar .btn.ghost { background: rgba(5, 6, 7, 0.7); }
+/* Notebook sits top right, out of the left-thumb joystick zone. */
+#btn-notebook {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  text-align: center;
+}
+/* An open overlay (card, notebook, dialog, pause) hides the alley buttons and the stick. */
+body.overlay-on .hud-bar,
+body.overlay-on .hud-prompt,
+body.overlay-on .joy { visibility: hidden; }
 
 /* Virtual joystick (touch) */
 
@@ -451,7 +475,7 @@ html, body {
 .board-screen {
   justify-content: flex-start;
   align-items: stretch;
-  padding: 14px 16px;
+  padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   overflow: hidden;
 }
 .board-wrap {
@@ -607,4 +631,13 @@ html, body {
   .board-main .cork { flex: 0 0 auto; }
   .board-side { overflow: visible; }
   .board-side .detail { flex: 0 0 auto; overflow: visible; min-height: 120px; }
+}
+
+/* Phone landscape: short screen, use the width */
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 500px) {
+  .pins { grid-template-columns: repeat(3, 1fr); }
+  .board-main .nums { grid-template-columns: repeat(3, 1fr); }
+  .board-side .suspects { grid-template-columns: repeat(4, 1fr); }
+  .h-title { font-size: 44px; }
+  .stack { gap: 12px; }
 }
