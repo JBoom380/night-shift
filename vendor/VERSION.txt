@@ -1,0 +1,5 @@
+PlayCanvas engine: v2.23.3 (build banner: revision b7655d8, RELEASE)
+File: vendor/playcanvas.min.js
+Source: https://unpkg.com/playcanvas@2/build/playcanvas.min.js
+Downloaded: 2026-11-01
+License: MIT (see the license banner at the top of playcanvas.min.js)

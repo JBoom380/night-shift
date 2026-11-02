@@ -1,0 +1,8 @@
+{
+  "url": "assets/scene/alley/lod-meta.json",
+  "format": "sog-lod",
+  "chunks": ["0_0", "0_1", "0_2", "0_3", "1_0", "1_1"],
+  "position": [0, 0.55, 0],
+  "rotation": [180, 0, 0],
+  "scale": 1
+}

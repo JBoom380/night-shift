@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="NIGHT SHIFT. A short noir detective game in a 3D alley.">
+<title>NIGHT SHIFT</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="flash-pool" class="flash-pool" hidden></div>
+
+<div id="hud" class="hud" hidden>
+  <div id="hud-count" class="hud-count">Clues 0 of 9</div>
+  <div id="hud-hint" class="hud-hint"></div>
+  <div id="hud-prompt" class="hud-prompt"></div>
+  <div class="hud-bar">
+    <button id="btn-notebook" class="btn ghost hud-btn" hidden>Notebook</button>
+    <button id="btn-inspect" class="btn hud-btn" hidden>Inspect</button>
+    <button id="btn-board" class="btn hud-btn" hidden>Go to the case board</button>
+  </div>
+</div>
+
+<div id="joy" class="joy" hidden><div id="joy-knob" class="joy-knob"></div></div>
+
+<div id="scr-title" class="screen">
+  <div class="stack">
+    <h1 id="t-title" class="h-title">NIGHT SHIFT</h1>
+    <p id="t-sub" class="t-sub"></p>
+    <button id="btn-start" class="btn big">Start</button>
+    <p id="t-credit" class="small"></p>
+    <p id="t-disc" class="small"></p>
+  </div>
+</div>
+
+<div id="scr-prologue" class="screen">
+  <div class="paper stack">
+    <p id="pro-text" class="story-text"></p>
+    <p class="tap-hint">Tap to continue <span id="pro-count"></span></p>
+  </div>
+</div>
+
+<div id="scr-card" class="screen">
+  <div class="paper card stack">
+    <p id="c-num" class="card-num"></p>
+    <h2 id="c-object" class="card-object"></h2>
+    <p id="c-look" class="card-look"></p>
+    <p id="c-line" class="card-line"></p>
+    <p id="c-fact" class="card-fact"></p>
+    <p class="card-meta"><b>Section</b> <span id="c-section"></span></p>
+    <p class="card-meta"><b>Source</b> <span id="c-source"></span></p>
+    <button id="btn-card-close" class="btn wide">Close card</button>
+  </div>
+</div>
+
+<div id="scr-notebook" class="screen">
+  <div class="paper stack wide-panel">
+    <h2 class="panel-title">Notebook</h2>
+    <p id="nb-count" class="nb-count"></p>
+    <ul id="nb-list" class="nb-list"></ul>
+    <button id="btn-nb-close" class="btn wide">Close notebook</button>
+  </div>
+</div>
+
+<div id="scr-dialog" class="screen dim">
+  <div class="paper stack dialog-panel">
+    <p id="dlg-who" class="dlg-who"></p>
+    <p id="dlg-text" class="dlg-text"></p>
+    <p class="tap-hint">Tap to continue</p>
+  </div>
+</div>
+
+<div id="scr-pause" class="screen">
+  <div class="stack">
+    <h2 class="h-title small-title">Paused</h2>
+    <button id="btn-resume" class="btn big">Resume</button>
+    <p class="small">Esc also resumes.</p>
+  </div>
+</div>
+
+<div id="scr-board" class="screen board-screen">
+  <div class="board-wrap">
+    <div class="board-main">
+      <h2 class="panel-title light">Case board</h2>
+      <div id="board-inner" class="cork">
+        <svg id="strings" class="strings" aria-hidden="true"></svg>
+        <div id="pins" class="pins"></div>
+        <div class="knot-row">
+          <div id="knot" class="knot">THE CODE?</div>
+        </div>
+      </div>
+      <div id="nums" class="nums"></div>
+    </div>
+    <div class="board-side">
+      <div id="detail" class="paper detail"></div>
+      <h3 class="sub-title light">Who did this?</h3>
+      <div id="suspects" class="suspects"></div>
+      <button id="btn-verdict-next" class="btn big" hidden>Continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="scr-ending" class="screen">
+  <div class="paper stack">
+    <p id="end-text" class="story-text"></p>
+    <p class="tap-hint">Tap to continue</p>
+  </div>
+</div>
+
+<div id="scr-credits" class="screen">
+  <div class="paper stack wide-panel">
+    <h2 id="cr-title" class="panel-title">NIGHT SHIFT</h2>
+    <p class="small-text"><a href="https://superspl.at/scene/23533997" target="_blank" rel="noopener">Scene page (superspl.at)</a></p>
+    <p class="small-text"><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0 license</a></p>
+    <p id="cr-credit" class="small-text"></p>
+    <h3 class="sub-title">Sources</h3>
+    <ul id="cr-sources" class="src-list"></ul>
+    <p id="cr-disc" class="small-text"></p>
+    <button id="btn-again" class="btn wide">Play again</button>
+  </div>
+</div>
+
+<script src="vendor/playcanvas.min.js"></script>
+<script src="data/story.js"></script>
+<script src="src/core.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
