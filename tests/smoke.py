@@ -99,7 +99,7 @@ def run_session(browser, label, viewport, phone, errors):
     page.wait_for_selector("#hud:not([hidden])", timeout=10000)
     page.wait_for_timeout(2000)
     shot(page, "alley_phone.png" if phone else "alley_desktop.png")
-    page.evaluate("NS_DEBUG.place(0, -2.4, 180, 0)")
+    page.evaluate("NS_DEBUG.place(0, -10, 180, 0)")
     page.wait_for_timeout(500)
     shot(page, "alley_real_phone.png" if phone else "alley_real_desktop.png")
     print(label, "fps", round(page.evaluate("NS_DEBUG.fps"), 1), "splat", page.evaluate("NS_DEBUG.splatLoaded"))
@@ -129,7 +129,7 @@ def run_session(browser, label, viewport, phone, errors):
     page.wait_for_timeout(600)
     shot(page, "landlord_figure.png" if not phone else "landlord_figure_phone.png")
     page.evaluate("NS_DEBUG.holdFigure(false)")
-    page.evaluate("NS_DEBUG.place(0, -2.4, 180, 0)")
+    page.evaluate("NS_DEBUG.place(0, -10, 180, 0)")
     st = page.evaluate("NS_DEBUG.inspect(5)")
     check(errors, label, st == "dialog", "dialog did not start after clue 5, state %s" % st)
     page.wait_for_selector("#scr-dialog.on", timeout=5000)
@@ -156,7 +156,7 @@ def run_session(browser, label, viewport, phone, errors):
     page.wait_for_selector("#btn-board:not([hidden])", timeout=5000)
     page.wait_for_timeout(500)
     if not phone:
-        page.evaluate("NS_DEBUG.place(0, 1.0, 180, 0)")
+        page.evaluate("NS_DEBUG.place(0, 6.0, 180, 0)")
         page.wait_for_timeout(600)
         shot(page, "basement_end.png")
     print(label, "board button top element:", page.evaluate(

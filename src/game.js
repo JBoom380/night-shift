@@ -11,58 +11,57 @@
   var debug = params.get('debug');
   var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
   var lowEnd = isTouch || Math.min(window.innerWidth, window.innerHeight) < 600;
+  var wideScreen = window.innerWidth > 1600;
 
   var SPEED = 2.2;
-  var EYE = 1.7;
+  var EYE = 1.65;
   var RADIUS = 0.3;
   var TOTAL = S.clues.length;
   var TRIGGER = (S.landlord && S.landlord.trigger_after) || 5;
   var LANDLORD_LINES = (S.landlord && S.landlord.lines && S.landlord.lines.length) ? S.landlord.lines : [{ who: 'WALT', text: '' }];
   var DEG = Math.PI / 180;
+  var PROMPT_D = 1.5;
+  var GLINT_D = 3;
+  var SHIMMER_D = 6;
 
-
-  // Real alley (splat with the transform in assets/scene/scene.json). Scale 1.0 (the door panel
-  // measures about 2.0 m). Inner wall faces at x -0.80 and +0.80. Floor at y 0.
-  // Solid floor runs about z -3.0 to +3.0. Walkable z -2.6 to +2.6. Mouth at the near end (z -3).
+  // Real alley. The splat (assets/scene/scene.json) has scale 1.0: 1 scan unit = 1 m.
+  // Measured from the decoded splats: floor at scan y 0.675 (placed at world y 0), inner wall faces
+  // at world x -1.57 and +1.65, usable scan length z -12 to +12 (world z = -scan z).
+  // The green wheelie cart measures 1.10 m tall, which agrees with scale 1.0.
   // Clue n is the normal of the surface it lies on: up (floor), +x, -x, -z.
   var ALLEY = {
-    spawn: { x: 0, z: -2.4, yaw: 180 },
-    bounds: { x0: -0.5, x1: 0.5, z0: -2.6, z1: 2.6 },
-    figure: { x: 0, z: -3.3 },
-    fire: { x: -0.45, y: 1.2, z: 1.95 },
-    door: { x: -0.8, z: 1.95 },
+    spawn: { x: 0, z: -10, yaw: 180 },
+    bounds: { x0: -1.0, x1: 1.0, z0: -12, z1: 12 },
+    figure: { x: 0, z: -11 },
+    fire: { x: 0, y: 1.6, z: 6 },
     clues: [
-      { x: -0.8, y: 1.3, z: -1.9, n: '+x' },
-      { x: 0.25, y: 0, z: -1.5, n: 'up' },
-      { x: 0.78, y: 1.5, z: -0.9, n: '-x' },
-      { x: -0.3, y: 0, z: -0.5, n: 'up' },
-      { x: -0.8, y: 1.8, z: 0.1, n: '+x' },
-      { x: 0.35, y: 0, z: 0.7, n: 'up' },
-      { x: 0.78, y: 0.9, z: 1.2, n: '-x' },
-      { x: -0.2, y: 0, z: 1.8, n: 'up' },
-      { x: 0.0, y: 1.1, z: 2.86, n: '-z' }
+      { x: -0.475, y: 0, z: -5.5, n: 'up' },
+      { x: 1.325, y: 0, z: -3.4, n: 'up' },
+      { x: -1.325, y: 0, z: -1.3, n: 'up' },
+      { x: 1.275, y: 0, z: 0.8, n: 'up' },
+      { x: -1.325, y: 0, z: 2.9, n: 'up' },
+      { x: 1.175, y: 0, z: 5.0, n: 'up' },
+      { x: -1.225, y: 0, z: 7.1, n: 'up' },
+      { x: 1.025, y: 0, z: 9.2, n: 'up' },
+      { x: -1.325, y: 0, z: 11.3, n: 'up' }
     ],
-    colliders: [
-      { minX: -1.6, maxX: -0.8, minZ: -4, maxZ: 4 },
-      { minX: 0.8, maxX: 1.6, minZ: -4, maxZ: 4 },
-      { minX: -1.6, maxX: 1.6, minZ: -4, maxZ: -2.9 },
-      { minX: -1.6, maxX: 1.6, minZ: 2.9, maxZ: 4 }
-    ]
+    colliders: []
   };
   var NORMALS = { up: [0, 1, 0], '+x': [1, 0, 0], '-x': [-1, 0, 0], '-z': [0, 0, -1] };
   var PAPER_ROT = { up: [-90, 0, 0], '+x': [0, 90, 0], '-x': [0, -90, 0], '-z': [0, 180, 0] };
   var GLOW_ROT = { up: [0, 0, 0], '+x': [0, 0, -90], '-x': [0, 0, 90], '-z': [-90, 0, 0] };
 
-  var colliders = [
-    { minX: -3.5, maxX: -3.0, minZ: -1, maxZ: 41 },
-    { minX: 3.0, maxX: 3.5, minZ: -1, maxZ: 41 },
-    { minX: -3.5, maxX: 3.5, minZ: 40, maxZ: 40.5 },
-    { minX: 1.25, maxX: 2.75, minZ: 8.45, maxZ: 9.55 },
-    { minX: -2.6, maxX: -1.8, minZ: 13.6, maxZ: 14.4 },
-    { minX: -1.45, maxX: -0.95, minZ: 15.75, maxZ: 16.25 },
-    { minX: -3.0, maxX: 3.0, minZ: 30.9, maxZ: 31.1 }
+  // Splat budget and render scale steps. Level 1 is the start for desktop.
+  var QL = [
+    { budget: 250000, scale: 0.6 },
+    { budget: 400000, scale: 1.0 },
+    { budget: 800000, scale: 1.0 },
+    { budget: 1200000, scale: 1.0 }
   ];
+  var PX_CAP = isTouch ? 1.5 : 1.0;
+  var QUALITY_AT = [3, 6];
 
+  var colliders = [];
   var app = null;
   var canvas = null;
   var rig = null;
@@ -88,6 +87,15 @@
   var fpsFrames = 0;
   var fpsTime = 0;
   var fpsValue = 0;
+  var qLevel = lowEnd ? 0 : 1;
+  var qStepsUp = 0;
+  var qDone = false;
+  var qEval = 0;
+  var qTime = -1;
+  var qWindow = new Float32Array(1024);
+  var qCount = 0;
+  var qAcc = 0;
+  var qAccN = 0;
 
   var state = 'boot';
   var found = [];
@@ -213,19 +221,11 @@
     return m;
   }
 
+  // Stand-in alley: only shown if the splat fails to load.
   function buildStandIn() {
     brickTex = makeBrick();
     var dark = mat(0.05, 0.045, 0.04, 0.2);
     var ground = mat(0.07, 0.075, 0.08, 0.75);
-    var metal = mat(0.12, 0.13, 0.13, 0.5);
-    var green = mat(0.12, 0.2, 0.16, 0.4);
-    var crate = mat(0.3, 0.2, 0.1, 0.2);
-    var concrete = mat(0.22, 0.22, 0.21, 0.1);
-    var tapeMat = new pc.StandardMaterial();
-    tapeMat.diffuse = color(0.95, 0.75, 0.12);
-    tapeMat.emissive = color(0.3, 0.22, 0.02);
-    tapeMat.gloss = 0.3;
-    tapeMat.update();
     var lampMat = new pc.StandardMaterial();
     lampMat.diffuse = color(0.9, 0.6, 0.25);
     lampMat.emissive = color(1, 0.62, 0.22);
@@ -235,39 +235,13 @@
     box(3.25, 6, 20, 0.5, 12, 40, wallMat(10, 3));
     box(0, 6, 40.25, 7, 12, 0.5, wallMat(2, 3));
     box(0, -0.05, 15, 6, 0.1, 80, ground);
-
     var wins = [4.0, 7.5, 10.5];
     var wz = [6, 12, 18, 24];
     for (var w = 0; w < wins.length; w++) {
       for (var k = 0; k < wz.length; k++) {
         box(-3.0, wins[w], wz[k], 0.04, 1.2, 1.0, dark);
-        if (k % 2 === 0) { box(3.0, wins[w], wz[k] + 3, 0.04, 1.2, 1.0, dark); }
       }
     }
-
-    var fy = [3.5, 7, 10.5];
-    for (var f = 0; f < fy.length; f++) {
-      box(2.4, fy[f], 12, 1.2, 0.08, 4, metal);
-      box(2.4, fy[f] + 0.5, 14, 1.2, 1.0, 0.05, metal);
-      box(1.8, fy[f] + 0.5, 12, 0.05, 1.0, 4, metal);
-    }
-
-    var dumpster = box(2.0, 0.55, 9.0, 1.5, 1.1, 1.1, green);
-    dumpster.name = 'dumpster';
-    box(-2.2, 0.4, 14, 0.8, 0.8, 0.8, crate);
-    box(-1.2, 0.25, 16, 0.5, 0.5, 0.5, crate);
-
-    box(-2.05, 0.005, 34.5, 1.7, 0.01, 3, dark);
-    box(-2.95, 0.45, 34.5, 0.1, 0.9, 3, concrete);
-    box(-1.15, 0.45, 34.5, 0.1, 0.9, 3, concrete);
-
-    box(0, 1.0, 31, 6, 0.05, 0.04, tapeMat);
-    box(0, 0.5, 31, 6, 0.05, 0.04, tapeMat);
-    box(-2.9, 0.55, 31, 0.06, 1.1, 0.06, metal);
-    box(2.9, 0.55, 31, 0.06, 1.1, 0.06, metal);
-
-    box(2.7, 2.25, 18, 0.08, 4.5, 0.08, metal);
-    box(2.4, 4.4, 18, 0.6, 0.08, 0.08, metal);
     var head = box(2.2, 4.3, 18, 0.3, 0.12, 0.3, lampMat);
     head.name = 'lamp';
 
@@ -284,18 +258,16 @@
     lampLight = lamp;
 
     var hm = hazeMat();
-    var hazes = [[-1.5, 1.6, 34], [-2.2, 2.2, 36], [0.3, 1.4, 33.5]];
-    for (var h = 0; h < hazes.length; h++) {
-      var p = new pc.Entity('haze');
-      p.addComponent('render', { type: 'plane', material: hm });
-      p.setLocalPosition(hazes[h][0], hazes[h][1], hazes[h][2]);
-      p.setLocalEulerAngles(-90, 0, 0);
-      p.setLocalScale(4, 1, 3);
-      app.root.addChild(p);
-      smokeEnts.push({ e: p, y: hazes[h][1], s: h });
-    }
+    var p = new pc.Entity('haze');
+    p.addComponent('render', { type: 'plane', material: hm });
+    p.setLocalPosition(-1.5, 1.6, 34);
+    p.setLocalEulerAngles(-90, 0, 0);
+    p.setLocalScale(4, 1, 3);
+    app.root.addChild(p);
+    smokeEnts.push({ e: p, y: 1.6, s: 0 });
   }
 
+  // Rain: one cheap batch of 120 thin drops, spread along the alley.
   function buildRain() {
     var m = new pc.StandardMaterial();
     m.diffuse = color(0, 0, 0);
@@ -304,16 +276,16 @@
     m.blendType = pc.BLEND_NORMAL;
     m.depthWrite = false;
     m.update();
-    for (var i = 0; i < 220; i++) {
+    for (var i = 0; i < 120; i++) {
       var e = new pc.Entity('drop');
       e.addComponent('render', { type: 'box', material: m });
       e.setLocalScale(0.006, 0.45, 0.006);
       app.root.addChild(e);
       rainDrops.push({
         e: e,
-        x: -2.9 + Math.random() * 5.8,
-        y: Math.random() * 12,
-        z: player.z + (Math.random() * 30 - 8),
+        x: -1.2 + Math.random() * 2.4,
+        y: Math.random() * 6,
+        z: player.z + (Math.random() * 20 - 4),
         v: 8 + Math.random() * 4
       });
     }
@@ -342,19 +314,20 @@
     return tex;
   }
 
+  // White paper with faint printed lines. Not emissive. The title is shown on the card only.
   function paperTexture() {
     var c = document.createElement('canvas');
     c.width = 128;
     c.height = 128;
     var g = c.getContext('2d');
-    g.fillStyle = '#e9e1cc';
+    g.fillStyle = '#f2f0ea';
     g.fillRect(0, 0, 128, 128);
-    g.strokeStyle = 'rgba(60,50,40,0.35)';
+    g.strokeStyle = 'rgba(70,70,66,0.28)';
     g.lineWidth = 2;
-    for (var y = 24; y < 128; y += 14) {
+    for (var y = 22; y < 124; y += 12) {
       g.beginPath();
-      g.moveTo(14, y);
-      g.lineTo(114, y);
+      g.moveTo(12, y);
+      g.lineTo(y % 24 === 10 ? 84 : 116, y);
       g.stroke();
     }
     var tex = new pc.Texture(app.graphicsDevice, { width: 128, height: 128, format: pc.PIXELFORMAT_RGBA8, mipmaps: true });
@@ -362,19 +335,18 @@
     return tex;
   }
 
+  // Clue sheet: 0.25 m by 0.18 m. Glow plane is the same size and lies on the paper.
   function placeClue(c, sp) {
     var n = NORMALS[sp.n];
     var r = PAPER_ROT[sp.n];
     var g = GLOW_ROT[sp.n];
     c.x = sp.x; c.y = sp.y; c.z = sp.z;
-    c.e.setLocalScale(0.21, 0.28, 0.004);
+    c.e.setLocalScale(0.25, 0.18, 0.004);
     c.e.setLocalPosition(sp.x + n[0] * 0.006, sp.y + n[1] * 0.006, sp.z + n[2] * 0.006);
     c.e.setLocalEulerAngles(r[0], r[1], r[2]);
-    c.edge.setLocalScale(0.225, 0.295, 0.002);
-    c.edge.setLocalPosition(sp.x + n[0] * 0.002, sp.y + n[1] * 0.002, sp.z + n[2] * 0.002);
-    c.edge.setLocalEulerAngles(r[0], r[1], r[2]);
-    c.glow.setLocalScale(0.3, 1, 0.3);
-    c.glow.setLocalPosition(sp.x + n[0] * 0.03, sp.y + n[1] * 0.03, sp.z + n[2] * 0.03);
+    var gs = sp.n === 'up' ? [0.27, 1, 0.21] : (sp.n === '-z' ? [0.27, 1, 0.2] : [0.2, 1, 0.27]);
+    c.glow.setLocalScale(gs[0], gs[1], gs[2]);
+    c.glow.setLocalPosition(sp.x + n[0] * 0.012, sp.y + n[1] * 0.012, sp.z + n[2] * 0.012);
     c.glow.setLocalEulerAngles(g[0], g[1], g[2]);
   }
 
@@ -383,7 +355,7 @@
     var glowTex = radialTex();
     for (var i = 0; i < TOTAL; i++) {
       var pm = new pc.StandardMaterial();
-      pm.diffuse = color(0.92, 0.88, 0.78);
+      pm.diffuse = color(0.95, 0.94, 0.9);
       pm.diffuseMap = paperTex;
       pm.specular = color(0.05, 0.05, 0.05);
       pm.gloss = 0.1;
@@ -391,7 +363,7 @@
       pm.update();
       var gm = new pc.StandardMaterial();
       gm.diffuse = color(0, 0, 0);
-      gm.emissive = color(1, 0.8, 0.5);
+      gm.emissive = color(1, 0.96, 0.85);
       gm.opacity = 0;
       gm.opacityMap = glowTex;
       gm.opacityMapChannel = 'a';
@@ -400,17 +372,21 @@
       gm.update();
       var paper = new pc.Entity('clue' + i);
       paper.addComponent('render', { type: 'box', material: pm });
-      var edge = new pc.Entity('clue-edge' + i);
-      edge.addComponent('render', { type: 'box', material: mat(0.06, 0.05, 0.04, 0.1) });
       var glow = new pc.Entity('clue-glint' + i);
       glow.addComponent('render', { type: 'plane', material: gm });
-      app.root.addChild(edge);
       app.root.addChild(paper);
       app.root.addChild(glow);
-      var rec = { e: paper, edge: edge, glow: glow, x: 0, y: 0, z: 0 };
+      var rec = { e: paper, glow: glow, x: 0, y: 0, z: 0 };
       placeClue(rec, ALLEY.clues[i]);
       clueEnts.push(rec);
-      clueMats.push({ paper: pm, glow: gm });
+      clueMats.push({ paper: pm, glow: gm, lastOp: -1, dimmed: false });
+      if (debug === 'clues' || params.get('markers')) {
+        var mk = new pc.Entity('clue-marker' + i);
+        mk.addComponent('render', { type: 'box', material: mat(1, 0, 1, 0.1) });
+        mk.setLocalScale(0.04, 3.0, 0.04);
+        mk.setLocalPosition(rec.x, rec.y + 1.5, rec.z);
+        app.root.addChild(mk);
+      }
     }
   }
 
@@ -443,7 +419,7 @@
       clearColor: color(0.03, 0.035, 0.04),
       fov: 70,
       nearClip: 0.05,
-      farClip: 150
+      farClip: 25
     });
     rig = new pc.Entity('rig');
     rig.addChild(cam);
@@ -454,7 +430,7 @@
       type: 'spot',
       color: color(1, 0.95, 0.85),
       intensity: 3,
-      range: 22,
+      range: 16,
       innerConeAngle: 12,
       outerConeAngle: 26,
       castShadows: false
@@ -487,41 +463,17 @@
     splatEnt = ent;
   }
 
-  function addFireProps() {
-    var tapeMat = new pc.StandardMaterial();
-    tapeMat.diffuse = color(0.95, 0.75, 0.12);
-    tapeMat.emissive = color(0.3, 0.22, 0.02);
-    tapeMat.gloss = 0.3;
-    tapeMat.update();
-    var dx = ALLEY.door.x, dz = ALLEY.door.z;
-    // Police tape: two crossed strips on the real wall face over the doorway.
-    var rots = [30, -30];
-    for (var t = 0; t < rots.length; t++) {
-      var tp = new pc.Entity('tape');
-      tp.addComponent('render', { type: 'box', material: tapeMat });
-      tp.setLocalPosition(dx + 0.02, 1.15, dz);
-      tp.setLocalScale(0.02, 0.05, 1.2);
-      tp.setLocalEulerAngles(rots[t], 0, 0);
-      app.root.addChild(tp);
-    }
-    // Charred smear on the wall above the doorway.
-    var char = new pc.Entity('char-smear');
-    char.addComponent('render', { type: 'plane', material: radialMat(0.02, 0.015, 0.01, 0.75) });
-    char.setLocalPosition(dx + 0.012, 2.15, dz);
-    char.setLocalEulerAngles(0, 0, -90);
-    char.setLocalScale(0.9, 1, 0.9);
-    app.root.addChild(char);
-    // Smoke haze low at the doorway.
-    var hm = smokeMat();
-    var hz = [[dx + 0.35, 0.4, dz], [dx + 0.6, 0.9, dz - 0.3], [dx + 0.2, 0.25, dz + 0.45]];
-    for (var h = 0; h < hz.length; h++) {
-      var p = new pc.Entity('haze-fire');
-      p.addComponent('render', { type: 'plane', material: hm });
-      p.setLocalPosition(hz[h][0], hz[h][1], hz[h][2]);
-      p.setLocalEulerAngles(-90, 0, 0);
-      p.setLocalScale(1.2, 1, 1.0);
-      app.root.addChild(p);
-    }
+  // Quality: budget and render scale. Canvas pixel ratio is capped at 1 on desktop, 1.5 on touch.
+  function scaleFor(level) {
+    if (level === 1 && wideScreen) { return 0.75; }
+    return QL[level].scale;
+  }
+
+  function applyQuality(level) {
+    qLevel = level;
+    app.scene.gsplat.splatBudget = QL[level].budget;
+    app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, PX_CAP) * scaleFor(level);
+    app.resizeCanvas();
   }
 
   function radialMat(r, g, b, op) {
@@ -537,6 +489,17 @@
     return m;
   }
 
+  function addFireHaze() {
+    // One soft sprite of smoke at the basement end.
+    var hm = smokeMat();
+    var p = new pc.Entity('haze-fire');
+    p.addComponent('render', { type: 'plane', material: hm });
+    p.setLocalPosition(ALLEY.fire.x, 0.5, ALLEY.fire.z);
+    p.setLocalEulerAngles(-90, 0, 0);
+    p.setLocalScale(2.4, 1, 2.4);
+    app.root.addChild(p);
+  }
+
   function applyAlleyLayout() {
     var L = ALLEY;
     colliders = L.colliders;
@@ -548,17 +511,17 @@
     if (lampLight) {
       lampLight.setLocalPosition(L.fire.x, L.fire.y, L.fire.z);
       lampLight.light.color = color(1, 0.55, 0.25);
-      lampLight.light.range = 5;
+      lampLight.light.range = 6;
       lampBase = 0.6;
     }
-    addFireProps();
+    addFireHaze();
     player.x = L.spawn.x;
     player.z = L.spawn.z;
     yaw = L.spawn.yaw;
     pitch = 0;
-    app.scene.fogStart = 9;
-    app.scene.fogEnd = 26;
-    cam.camera.farClip = 40;
+    app.scene.fogStart = 8;
+    app.scene.fogEnd = 24;
+    cam.camera.farClip = 25;
   }
 
   function hideStandIn() {
@@ -574,11 +537,11 @@
     asset.on('load', function () {
       var ent = new pc.Entity('splat');
       ent.addComponent('gsplat', { asset: asset, unified: true });
-      ent.gsplat.lodBaseDistance = 6;
+      ent.gsplat.lodBaseDistance = 4;
       ent.gsplat.lodMultiplier = 3;
       ent.gsplat.lodRangeMin = lowEnd ? 1 : 0;
       ent.gsplat.lodRangeMax = 99;
-      app.scene.gsplat.splatBudget = lowEnd ? 450000 : 1000000;
+      applyQuality(qLevel);
       placeSplat(ent, m);
       hideStandIn();
     });
@@ -601,7 +564,7 @@
       var done = function () {
         left--;
         if (left === 0) {
-          if (okCount > 0) { placeSplat(root, m); hideStandIn(); }
+          if (okCount > 0) { applyQuality(qLevel); placeSplat(root, m); hideStandIn(); }
           else { console.warn('No chunk loaded. Stand-in alley kept.'); }
         }
       };
@@ -681,22 +644,53 @@
     return best;
   }
 
+  // Looking at a clue: within prompt distance and inside about 60 degrees of the view direction.
+  function facingClue(maxD) {
+    var rad = yaw * DEG;
+    var fx = -Math.sin(rad), fz = -Math.cos(rad);
+    var best = -1, bestD = maxD;
+    for (var i = 0; i < clueEnts.length; i++) {
+      var dx = clueEnts[i].x - player.x, dz = clueEnts[i].z - player.z;
+      var d = Math.sqrt(dx * dx + dz * dz) || 1;
+      var dot = (dx * fx + dz * fz) / d;
+      if (d <= bestD && dot > 0.5) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
   function updateGlints() {
     var rad = yaw * DEG, prad = pitch * DEG;
     var fx = -Math.sin(rad) * Math.cos(prad), fy = Math.sin(prad), fz = -Math.cos(rad) * Math.cos(prad);
-    var pulse = 0.5 + 0.5 * Math.sin(time * 3.2);
     for (var i = 0; i < clueEnts.length; i++) {
       var c = clueEnts[i];
       var m = clueMats[i];
+      var isFound = found.indexOf(i) >= 0;
+      if (isFound) {
+        if (!m.dimmed) {
+          m.paper.diffuse.set(0.55, 0.54, 0.5);
+          m.paper.update();
+          m.dimmed = true;
+          m.glow.opacity = 0;
+          m.glow.update();
+          m.lastOp = 0;
+        }
+        continue;
+      }
       var vx = c.x - player.x, vy = c.y - EYE, vz = c.z - player.z;
       var d = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
       var dot = (vx * fx + vy * fy + vz * fz) / d;
-      var lit = (flashOn && dot > 0.97 && d < 10) ? 1 : (d < 3 ? 0.4 : 0);
-      var isFound = found.indexOf(i) >= 0;
-      m.paper.diffuse.set(isFound ? 0.6 : 0.92, isFound ? 0.57 : 0.88, isFound ? 0.5 : 0.78);
-      m.paper.update();
-      m.glow.opacity = isFound ? 0 : (0.08 + 0.14 * pulse) * (0.3 + 0.7 * lit);
-      m.glow.update();
+      var lit = (flashOn && dot > 0.97 && d < GLINT_D) ? 1 : 0;
+      // Shimmer: a soft light sweep about every 2.5 s, phase offset per clue.
+      var ph = (time + i * 0.37) % 2.5;
+      var sweep = ph < 0.6 ? Math.sin(Math.PI * ph / 0.6) : 0;
+      var base = d < SHIMMER_D ? 0.02 : 0;
+      var op = base + sweep * (0.08 + 0.5 * lit) * (d < SHIMMER_D ? 1 : 0) + lit * 0.12;
+      op = clamp(op, 0, 0.65);
+      if (Math.abs(op - m.lastOp) > 0.004) {
+        m.glow.opacity = op;
+        m.glow.update();
+        m.lastOp = op;
+      }
     }
   }
 
@@ -713,21 +707,21 @@
   }
 
   function updateRain(dt) {
+    var cx = freeCam ? freeCam.x : player.x;
+    var cy = freeCam ? freeCam.y : EYE;
+    var cz = freeCam ? freeCam.z : player.z;
     for (var i = 0; i < rainDrops.length; i++) {
       var d = rainDrops[i];
       d.y -= d.v * dt;
       if (d.y < 0) {
-        d.y = 10 + Math.random() * 4;
-        d.x = -2.9 + Math.random() * 5.8;
-        d.z = player.z + (Math.random() * 30 - 8);
+        d.y = 6 + Math.random() * 3;
+        d.x = -1.2 + Math.random() * 2.4;
+        d.z = cz + (Math.random() * 20 - 4);
         d.v = 8 + Math.random() * 4;
       }
       d.e.setLocalPosition(d.x, d.y, d.z);
-      var cx = freeCam ? freeCam.x : player.x;
-      var cy = freeCam ? freeCam.y : EYE;
-      var cz = freeCam ? freeCam.z : player.z;
       var rx = d.x - cx, ry = d.y - cy, rz = d.z - cz;
-      d.e.enabled = rx * rx + ry * ry + rz * rz > 2.25;
+      d.e.enabled = rx * rx + ry * ry + rz * rz > 2.25 && rx * rx + rz * rz < 400;
     }
     for (var s = 0; s < smokeEnts.length; s++) {
       var sm = smokeEnts[s];
@@ -742,7 +736,7 @@
     var pool = document.getElementById('flash-pool');
     if (pool) { pool.hidden = !(state === 'alley' && flashOn); }
     var visible = ['alley', 'card', 'notebook', 'pause', 'dialog'].indexOf(state) >= 0;
-    var near = nearestClue(2);
+    var near = facingClue(PROMPT_D);
     var prompt = '';
     if (state === 'alley') {
       if (found.length >= TOTAL) { prompt = 'All nine cards found.'; }
@@ -794,14 +788,51 @@
     fpsTime += rawDt;
     if (fpsTime >= 0.5) {
       fpsValue = fpsFrames / fpsTime;
-      if (fpsEl) { fpsEl.textContent = 'fps ' + fpsValue.toFixed(1) + (splatReady ? ' splat' : ' stand-in'); }
+      if (fpsEl) {
+        fpsEl.textContent = 'fps ' + fpsValue.toFixed(1) + (splatReady ? ' splat' : ' stand-in') +
+          ' | budget ' + (QL[qLevel].budget / 1000) + 'k | scale ' + scaleFor(qLevel);
+      }
       fpsFrames = 0;
       fpsTime = 0;
     }
   }
 
+  // Auto quality: record frame times in the alley. At 3 s and 6 s, read the median fps.
+  // Above 55 steps up one level (max two up-steps). Below 40 steps down one level, once.
+  function qualityTick(rawDt) {
+    if (qDone || state !== 'alley' || freeCam) { return; }
+    if (qTime < 0) { qTime = 0; qCount = 0; qAcc = 0; qAccN = 0; }
+    qTime += rawDt;
+    qAcc += rawDt;
+    qAccN++;
+    if (qAcc >= 0.5) {
+      qWindow[qCount % qWindow.length] = qAccN / qAcc;
+      qCount++;
+      qAcc = 0;
+      qAccN = 0;
+    }
+    if (qTime < QUALITY_AT[qEval]) { return; }
+    var n = Math.min(qCount, qWindow.length);
+    if (n === 0) { return; }
+    var arr = Array.prototype.slice.call(qWindow, 0, n).sort(function (a, b) { return a - b; });
+    var median = arr[Math.floor(arr.length / 2)];
+    if (median > 55 && qLevel < QL.length - 1 && qStepsUp < 2) {
+      qStepsUp++;
+      applyQuality(qLevel + 1);
+    } else if (median < 40 && qLevel > 0 && qStepsUp >= 0 && qEval === 0) {
+      applyQuality(qLevel - 1);
+      qDone = true;
+    }
+    qEval++;
+    qTime = -1;
+    if (qEval >= QUALITY_AT.length) { qDone = true; }
+    qLastMedian = median;
+  }
+  var qLastMedian = 0;
+
   function update(dt) {
     updateFps(dt);
+    qualityTick(dt);
     dt = Math.min(dt, 0.05);
     time += dt;
     if (freeCam) {
@@ -896,7 +927,7 @@
   function doInspect() {
     if (state !== 'alley') { return; }
     if (figureActive && !landlordDone) { startLandlord(); return; }
-    var i = nearestClue(2);
+    var i = nearestClue(PROMPT_D);
     if (i >= 0) { openCard(i); }
   }
 
@@ -1088,6 +1119,7 @@
       window.addEventListener('resize', function () { app.resizeCanvas(); });
 
       setupScene();
+      applyQuality(qLevel);
       app.on('update', update);
       app.start();
 
@@ -1136,6 +1168,12 @@
     get splatMode() { return splatMode; },
     holdFigure: function (v) { figureHold = !!v; return figureHold; },
     get fps() { return fpsValue; },
+    get quality() { return { level: qLevel, budget: QL[qLevel].budget, scale: scaleFor(qLevel), median: qLastMedian, done: qDone }; },
+    stats: function () {
+      var f = app && app.stats && app.stats.frame ? app.stats.frame : {};
+      return { fps: fpsValue, budget: QL[qLevel].budget, scale: scaleFor(qLevel), dpr: window.devicePixelRatio, frame: JSON.stringify(f) };
+    },
+    clues: function () { return clueEnts.map(function (c) { return { x: c.x, y: c.y, z: c.z }; }); },
     place: function (x, z, yw, pt) {
       player.x = clamp(x, bounds.x0, bounds.x1);
       player.z = clamp(z, bounds.z0, bounds.z1);
@@ -1161,6 +1199,11 @@
       yaw = yw; pitch = pt;
       return true;
     },
+    hideSplat: function (v) {
+      if (!splatEnt) { return false; }
+      splatEnt.enabled = !v;
+      return !v;
+    },
     setSplat: function (p, r, s) {
       if (!splatEnt) { return false; }
       splatEnt.setLocalPosition(p[0], p[1], p[2]);
@@ -1171,7 +1214,7 @@
     inspect: function (i) {
       var c = clueEnts[i];
       if (!c) { return 'none'; }
-      player.x = clamp(c.x * 0.7, -2.5, 2.5);
+      player.x = clamp(c.x * 0.7, bounds.x0, bounds.x1);
       player.z = c.z;
       doInspect();
       return state;
